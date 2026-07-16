@@ -1,0 +1,1431 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>System Monitor</title>
+  <script src="/assets/frappe_system_monitor/js/socket.io.min.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0
+    }
+
+    :root {
+      --bg: #0a0e14;
+      --surface: #111620;
+      --surface2: #1a2030;
+      --border: #1e2a3a;
+      --text: #e6edf3;
+      --text2: #8b949e;
+      --text3: #6e7681;
+      --blue: #58a6ff;
+      --green: #3fb950;
+      --yellow: #d29922;
+      --red: #f85149;
+      --orange: #f0883e;
+      --purple: #a371f7;
+      --radius: 10px;
+      --radius-sm: 6px;
+    }
+
+    body {
+      background: var(--bg);
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
+      color: var(--text);
+      line-height: 1.5
+    }
+
+    .main {
+      margin: 0 auto;
+      padding: 24px 32px
+    }
+
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 12px
+    }
+
+    .page-title {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--text)
+    }
+
+    .page-meta {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: .72rem;
+      color: var(--text2)
+    }
+
+    .chip b {
+      color: var(--text);
+      font-weight: 600
+    }
+
+    .metric-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 20px
+    }
+
+    @media(max-width:1100px) {
+      .metric-row {
+        grid-template-columns: repeat(2, 1fr)
+      }
+    }
+
+    @media(max-width:600px) {
+      .metric-row {
+        grid-template-columns: 1fr
+      }
+    }
+
+    .metric {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+      position: relative;
+      overflow: hidden
+    }
+
+    .metric-label {
+      font-size: .7rem;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--text3);
+      font-weight: 600;
+      margin-bottom: 4px
+    }
+
+    .metric-val {
+      font-size: 1.5rem;
+      font-weight: 700;
+      line-height: 1.1
+    }
+
+    .metric-sub {
+      font-size: .72rem;
+      color: var(--text2);
+      margin-top: 2px
+    }
+
+    .metric-btn {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      width: 28px;
+      height: 28px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text3);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all .15s
+    }
+
+    .metric-btn:hover {
+      border-color: var(--blue);
+      color: var(--blue);
+      background: rgba(88, 166, 255, .08)
+    }
+
+    .metric-btn.active {
+      border-color: var(--blue);
+      color: var(--blue);
+      background: rgba(88, 166, 255, .12)
+    }
+
+    .metric-btn svg {
+      width: 14px;
+      height: 14px
+    }
+
+    .chart-expand {
+      margin-top: 20px;
+      display: none
+    }
+
+    .chart-expand.open {
+      display: block
+    }
+
+    .section {
+      margin-top: 28px
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      cursor: pointer;
+      user-select: none
+    }
+
+    .section-title {
+      font-size: .88rem;
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px
+    }
+
+    .section-title .arrow {
+      transition: transform .2s;
+      color: var(--text3);
+      font-size: .7rem
+    }
+
+    .section-header.open .arrow {
+      transform: rotate(90deg)
+    }
+
+    .section-line {
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+      margin: 0 12px
+    }
+
+    .section-body {
+      overflow: hidden;
+      transition: max-height .3s ease
+    }
+
+    .chart-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px;
+      margin-bottom: 16px
+    }
+
+    .chart-title {
+      font-size: .78rem;
+      font-weight: 600;
+      color: var(--text2);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between
+    }
+
+    .chart-title .val {
+      color: var(--text);
+      font-size: .82rem
+    }
+
+    .chart-area {
+      height: 140px;
+      position: relative;
+      cursor: crosshair
+    }
+
+    .chart-area svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+      pointer-events: none
+    }
+
+    .chart-crosshair {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 1px;
+      background: rgba(255, 255, 255, .2);
+      pointer-events: none;
+      display: none;
+      z-index: 2
+    }
+
+    .chart-dot {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      border: 2px solid var(--bg);
+      pointer-events: none;
+      display: none;
+      z-index: 3;
+      transform: translate(-50%, -50%)
+    }
+
+    .chart-tooltip {
+      position: absolute;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 6px 10px;
+      font-size: .72rem;
+      pointer-events: none;
+      display: none;
+      z-index: 4;
+      white-space: nowrap;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, .4)
+    }
+
+    .chart-tooltip .tt-val {
+      font-weight: 700;
+      color: var(--text);
+      font-size: .82rem
+    }
+
+    .chart-tooltip .tt-time {
+      color: var(--text3);
+      font-size: .66rem;
+      margin-top: 1px
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px
+    }
+
+    @media(max-width:900px) {
+
+      .grid-2,
+      .grid-3 {
+        grid-template-columns: 1fr
+      }
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px
+    }
+
+    .card-title {
+      font-size: .72rem;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: var(--text3);
+      font-weight: 600;
+      margin-bottom: 10px
+    }
+
+    .svc-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 8px
+    }
+
+    .svc-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: .78rem
+    }
+
+    .svc-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0
+    }
+
+    .svc-dot.on {
+      background: var(--green);
+      box-shadow: 0 0 6px rgba(63, 185, 80, .4)
+    }
+
+    .svc-dot.off {
+      background: var(--red);
+      box-shadow: 0 0 6px rgba(248, 81, 73, .4)
+    }
+
+    .svc-dot.unk {
+      background: var(--yellow);
+      box-shadow: 0 0 6px rgba(210, 160, 40, .4)
+    }
+
+    .svc-name {
+      color: var(--text)
+    }
+
+    .svc-status {
+      margin-left: auto;
+      color: var(--text3);
+      font-size: .7rem
+    }
+
+    .user-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      margin-bottom: 6px
+    }
+
+    .user-av {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: var(--blue);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-weight: 700;
+      font-size: .72rem
+    }
+
+    .user-name {
+      color: var(--text);
+      font-size: .8rem;
+      font-weight: 500
+    }
+
+    .user-time {
+      color: var(--text3);
+      font-size: .7rem
+    }
+
+    .err-item {
+      padding: 10px 12px;
+      background: rgba(248, 81, 73, .05);
+      border-left: 3px solid var(--red);
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      margin-bottom: 6px
+    }
+
+    .err-method {
+      color: var(--red);
+      font-weight: 600;
+      font-size: .76rem
+    }
+
+    .err-text {
+      color: var(--text2);
+      font-size: .7rem;
+      margin-top: 3px;
+      font-family: 'Fira Code', monospace;
+      word-break: break-all
+    }
+
+    .err-time {
+      color: var(--text3);
+      font-size: .66rem;
+      margin-top: 3px
+    }
+
+    .tbl {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .76rem
+    }
+
+    .tbl th {
+      color: var(--text3);
+      text-align: left;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+      font-size: .68rem;
+      text-transform: uppercase;
+      letter-spacing: .04em
+    }
+
+    .tbl td {
+      color: var(--text2);
+      padding: 7px 10px;
+      border-bottom: 1px solid rgba(30, 42, 58, .4)
+    }
+
+    .tbl tr:hover td {
+      background: var(--surface2)
+    }
+
+    .tbl td:first-child {
+      color: var(--text)
+    }
+
+    .sql-cell {
+      font-family: 'Fira Code', monospace;
+      font-size: .72rem;
+      color: var(--blue);
+      max-width: 360px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap
+    }
+
+    .proc-filter {
+      width: 100%;
+      padding: 8px 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-size: .78rem;
+      outline: none;
+      transition: border-color .15s
+    }
+
+    .proc-filter:focus {
+      border-color: var(--blue)
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: .68rem;
+      font-weight: 600
+    }
+
+    .badge-g {
+      background: rgba(63, 185, 80, .12);
+      color: var(--green)
+    }
+
+    .badge-y {
+      background: rgba(210, 160, 40, .12);
+      color: var(--yellow)
+    }
+
+    .badge-r {
+      background: rgba(248, 81, 73, .12);
+      color: var(--red)
+    }
+
+    .badge-n {
+      background: rgba(139, 148, 158, .1);
+      color: var(--text2)
+    }
+
+    .badge-b {
+      background: rgba(88, 166, 255, .12);
+      color: var(--blue)
+    }
+
+    .loading {
+      text-align: center;
+      padding: 120px;
+      color: var(--text2);
+      font-size: .9rem
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 28px;
+      height: 28px;
+      border: 3px solid var(--border);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      margin-bottom: 12px
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg)
+      }
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1
+      }
+
+      50% {
+        opacity: .4
+      }
+    }
+
+    .job-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      margin-bottom: 6px;
+      font-size: .78rem
+    }
+
+    .job-method {
+      color: var(--blue);
+      font-weight: 600;
+      font-family: 'Fira Code', monospace;
+      font-size: .72rem;
+      word-break: break-all
+    }
+
+    .job-meta {
+      color: var(--text3);
+      font-size: .68rem;
+      margin-top: 2px
+    }
+
+    .job-queue {
+      display: inline-flex;
+      padding: 1px 6px;
+      background: rgba(88, 166, 255, .1);
+      color: var(--blue);
+      border-radius: 4px;
+      font-size: .66rem;
+      font-weight: 600
+    }
+
+    .job-exc {
+      color: var(--red);
+      font-size: .68rem;
+      margin-top: 4px;
+      font-family: monospace;
+      word-break: break-all;
+      max-height: 60px;
+      overflow: hidden
+    }
+
+    .job-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: .68rem;
+      font-weight: 600
+    }
+
+    .job-status.running {
+      color: var(--green)
+    }
+
+    .job-status.queued {
+      color: var(--yellow)
+    }
+
+    .job-status.failed {
+      color: var(--red)
+    }
+
+    .slow-item {
+      padding: 10px 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      margin-bottom: 6px
+    }
+
+    .slow-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap
+    }
+
+    .slow-time {
+      font-size: 1rem;
+      font-weight: 700;
+      min-width: 50px
+    }
+
+    .slow-user {
+      color: var(--text2);
+      font-size: .76rem
+    }
+
+    .slow-db {
+      color: var(--blue);
+      font-size: .72rem
+    }
+
+    .slow-query {
+      margin-top: 6px;
+      font-family: 'Fira Code', monospace;
+      font-size: .72rem;
+      color: var(--text2);
+      word-break: break-all;
+      white-space: pre-wrap;
+      max-height: 120px;
+      overflow-y: auto;
+      line-height: 1.4
+    }
+
+    .proc-row-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px
+    }
+
+    @media(max-width:960px) {
+      .proc-row-grid {
+        grid-template-columns: 1fr
+      }
+    }
+
+    .proc-col h4 {
+      font-size: .74rem;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: var(--text3);
+      font-weight: 600;
+      margin-bottom: 8px
+    }
+
+    .proc-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(30, 42, 58, .4);
+      font-size: .76rem
+    }
+
+    .proc-item:last-child {
+      border-bottom: none
+    }
+
+    .proc-info {
+      flex: 1;
+      min-width: 0;
+      margin-right: 10px
+    }
+
+    .proc-name {
+      color: var(--text);
+      font-weight: 500;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap
+    }
+
+    .proc-meta {
+      font-size: .66rem;
+      color: var(--text3);
+      margin-top: 1px
+    }
+
+    .proc-val {
+      font-size: .82rem;
+      font-weight: 700;
+      color: var(--blue);
+      flex-shrink: 0
+    }
+  </style>
+</head>
+
+<body>
+  <div class="main" id="app">
+    <div class="loading">
+      <div class="spinner"></div>
+      <p>Connecting to server...</p>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var ROOT = document.getElementById('app');
+      var uid = 'sm' + Math.random().toString(36).slice(2, 8);
+      var connState = { mode: 'connecting' };
+      var procFilterText = '';
+      var chartStore = {};
+      var lastTimestamp = 0;
+      var lastHistLen = 0;
+      var collapsedSections = { 'slow-queries': true, 'bg-jobs': true };
+
+      window.toggleSection = function (id) {
+        collapsedSections[id] = !collapsedSections[id];
+        var el = document.getElementById(id);
+        if (el) {
+          var header = el.querySelector('.section-header');
+          var body = el.querySelector('.section-body');
+          if (header && body) {
+            if (collapsedSections[id]) {
+              header.classList.remove('open');
+              body.style.maxHeight = '0';
+            } else {
+              header.classList.add('open');
+              body.style.maxHeight = '2000px';
+            }
+          }
+        }
+      };
+
+      function getSectionHTML(id, title, bodyHTML, defaultOpen) {
+        var isCollapsed = collapsedSections[id] !== undefined ? collapsedSections[id] : !defaultOpen;
+        var headerClass = isCollapsed ? 'section-header' : 'section-header open';
+        var bodyStyle = isCollapsed ? 'max-height:0' : 'max-height:2000px';
+        var s = '<div class="section" id="' + id + '">';
+        s += '<div class="' + headerClass + '" onclick="toggleSection(\'' + id + '\')">';
+        s += '<div class="section-title"><span class="arrow">▶</span>' + title + '</div>';
+        s += '<div class="section-line"></div></div>';
+        s += '<div class="section-body" style="' + bodyStyle + '">';
+        s += bodyHTML;
+        s += '</div></div>';
+        return s;
+      }
+
+      function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML }
+      function fmtBytes(b) { if (b >= 1073741824) return (b / 1073741824).toFixed(1) + ' GB'; if (b >= 1048576) return (b / 1048576).toFixed(1) + ' MB'; if (b >= 1024) return (b / 1024).toFixed(1) + ' KB'; return b + ' B' }
+      function fmtBytesRate(b) { if (b >= 1048576) return (b / 1048576).toFixed(1) + ' MB/s'; if (b >= 1024) return (b / 1024).toFixed(1) + ' KB/s'; return b + ' B/s' }
+      function fmtUptime(s) { var d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60); return (d ? d + 'd ' : '') + h + 'h ' + m + 'm' }
+      function fmtNum(n) { n = n || 0; if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M'; if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K'; return (Math.round(n * 10) / 10).toString() }
+      function fmtMs(n) { n = n || 0; if (n >= 1000) return (n / 1000).toFixed(2) + ' s'; return Math.round(n) + ' ms' }
+      function colorFor(pct, inv) { if (inv) return pct > 50 ? '#3fb950' : pct > 20 ? '#d29922' : '#f85149'; return pct < 50 ? '#3fb950' : pct < 80 ? '#d29922' : '#f85149' }
+      function badge(text, level) { var cl = level === 'g' ? 'badge-g' : level === 'y' ? 'badge-y' : level === 'r' ? 'badge-r' : level === 'b' ? 'badge-b' : 'badge-n'; return '<span class="badge ' + cl + '">' + esc(text) + '</span>' }
+      function cmdBadge(cmd) { cmd = cmd || 'Sleep'; var lvl = cmd === 'Sleep' ? 'n' : cmd === 'Killed' ? 'r' : 'b'; return badge(cmd, lvl) }
+
+      function chartSVG(data, w, h, color, maxVal, cid) {
+        if (!data || data.length < 2) return '';
+        var mx = (typeof maxVal === 'number' && maxVal > 0) ? maxVal : Math.max.apply(null, data.concat([1]));
+        var step = w / (data.length - 1);
+        var line = 'M 0 ' + h, area = 'M 0 ' + h;
+        for (var i = 0; i < data.length; i++) {
+          var x = i * step;
+          var y = h - (data[i] / mx) * h * .88;
+          line += ' L ' + x.toFixed(1) + ' ' + y.toFixed(1);
+          area += ' L ' + x.toFixed(1) + ' ' + y.toFixed(1);
+        }
+        area += ' L ' + w + ' ' + h + ' Z';
+        var gid = uid + Math.random().toString(36).slice(2, 6);
+        var svg = '<svg viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none"><defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="' + color + '" stop-opacity=".3"/><stop offset="100%" stop-color="' + color + '" stop-opacity=".02"/></linearGradient></defs><path d="' + area + '" fill="url(#' + gid + ')"/><path d="' + line + '" fill="none" stroke="' + color + '" stroke-width="1.5" stroke-linejoin="round"/></svg>';
+        if (cid) chartStore[cid] = { data: data, maxVal: mx, w: w, h: h, color: color };
+        return svg;
+      }
+
+      function miniChart(data, color, maxVal) {
+        return '';
+      }
+
+      function largeChart(data, color, maxVal, title, currentVal, unit, cid) {
+        return '<div class="chart-panel"><div class="chart-title"><span>' + esc(title) + '</span><div style="display:flex;align-items:center;gap:8px"><span class="val">' + esc(currentVal) + (unit ? ' ' + esc(unit) : '') + '</span><button class="metric-btn active" onclick="toggleChart(\'' + cid + '\')" title="Close chart"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M3.72 3.72a.75.75 0 011.06 0L8 6.94l3.22-3.22a.75.75 0 111.06 1.06L9.06 8l3.22 3.22a.75.75 0 11-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 01-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 010-1.06z"/></svg></button></div></div><div class="chart-area" data-cid="' + cid + '">' + chartSVG(data, 600, 140, color, maxVal, cid) + '<div class="chart-crosshair"></div><div class="chart-dot"></div><div class="chart-tooltip"></div></div></div>';
+      }
+
+      function getPointTime(idx) {
+        if (!lastTimestamp || !lastHistLen) return '';
+        var pointsPerUpdate = 1;
+        var elapsed = (lastHistLen - 1 - idx) * 0.9;
+        var t = new Date((lastTimestamp - elapsed) * 1000);
+        return t.toLocaleTimeString();
+      }
+
+      function highlightChart(cid, idx) {
+        var st = chartStore[cid];
+        if (!st) return;
+        var areas = document.querySelectorAll('.chart-area[data-cid="' + cid + '"]');
+        if (!areas.length) return;
+        var area = areas[0];
+        var rect = area.getBoundingClientRect();
+        if (!rect.width) return;
+        var val = st.data[idx];
+        var x = (idx / (st.data.length - 1)) * rect.width;
+        var y = rect.height - (val / st.maxVal) * rect.height * .88;
+
+        var cross = area.querySelector('.chart-crosshair');
+        var dot = area.querySelector('.chart-dot');
+        var tip = area.querySelector('.chart-tooltip');
+        cross.style.display = 'block';
+        cross.style.left = x + 'px';
+        dot.style.display = 'block';
+        dot.style.left = x + 'px';
+        dot.style.top = y + 'px';
+        dot.style.background = st.color;
+        tip.style.display = 'block';
+        var tx = Math.min(x + 12, rect.width - 120);
+        var ty = Math.max(y - 40, 4);
+        tip.style.left = tx + 'px';
+        tip.style.top = ty + 'px';
+        var valStr = typeof val === 'number' ? val.toFixed(1) : String(val);
+        var timeStr = getPointTime(idx);
+        tip.innerHTML = '<div class="tt-val" style="color:' + st.color + '">' + valStr + '</div>' + (timeStr ? '<div class="tt-time">' + timeStr + '</div>' : '');
+      }
+
+      function clearAllCharts() {
+        document.querySelectorAll('.chart-area').forEach(function (area) {
+          var cross = area.querySelector('.chart-crosshair');
+          var dot = area.querySelector('.chart-dot');
+          var tip = area.querySelector('.chart-tooltip');
+          if (cross) cross.style.display = 'none';
+          if (dot) dot.style.display = 'none';
+          if (tip) tip.style.display = 'none';
+        });
+      }
+
+      function handleChartHover(e) {
+        var area = e.currentTarget;
+        var cid = area.getAttribute('data-cid');
+        if (!cid || !chartStore[cid]) return;
+        var st = chartStore[cid];
+        var rect = area.getBoundingClientRect();
+        var mx = e.clientX - rect.left;
+        var idx = Math.round((mx / rect.width) * (st.data.length - 1));
+        idx = Math.max(0, Math.min(st.data.length - 1, idx));
+
+        Object.keys(chartStore).forEach(function (k) {
+          var cs = chartStore[k];
+          var localIdx = Math.round((idx / (st.data.length - 1)) * (cs.data.length - 1));
+          localIdx = Math.max(0, Math.min(cs.data.length - 1, localIdx));
+          highlightChart(k, localIdx);
+        });
+      }
+
+      function handleChartLeave() {
+        clearAllCharts();
+      }
+
+      var openCharts = {};
+
+      function openChart(cid) {
+        var expandId = 'chart-expand';
+        if (cid.indexOf('mdb_') === 0) expandId = 'chart-expand-mdb';
+        var el = document.getElementById(expandId);
+        if (!el) return;
+        openCharts[cid] = true;
+        document.querySelectorAll('.metric-btn[onclick*="' + cid + '"]').forEach(function (b) { b.classList.add('active') });
+        var h = lastHistory || {};
+        var c = lastCurrent || {};
+        var dataMap = {
+          cpu: { d: h.cpu_total || [], color: colorFor(c.cpu_total), val: c.cpu_total + '%', unit: '', label: 'CPU Usage' },
+          mem: { d: h.ram_percent || [], color: colorFor(c.ram_percent), val: c.ram_percent + '%', unit: c.ram_used + ' / ' + c.ram_total + ' GB', label: 'Memory Usage' },
+          disk: { d: h.disk_percent || [], color: colorFor(c.disk_percent), val: c.disk_percent + '%', unit: c.disk_used + ' / ' + c.disk_total + ' GB', label: 'Disk Usage' },
+          swap: { d: h.swap_percent || [], color: colorFor(c.swap_percent), val: c.swap_percent + '%', unit: c.swap_used + ' / ' + c.swap_total + ' GB', label: 'Swap Usage' },
+          net_in: { d: h.net_recv || [], color: '#58a6ff', val: fmtBytesRate(c.net_recv), unit: '', label: 'Network In' },
+          net_out: { d: h.net_sent || [], color: '#3fb950', val: fmtBytesRate(c.net_sent), unit: '', label: 'Network Out' },
+          disk_r: { d: h.disk_read_bytes || [], color: '#d29922', val: fmtBytesRate(c.disk_read_bytes), unit: '', label: 'Disk Read' },
+          disk_w: { d: h.disk_write_bytes || [], color: '#f0883e', val: fmtBytesRate(c.disk_write_bytes), unit: '', label: 'Disk Write' },
+          mdb_conn: { d: h.mdb_threads_connected || [], color: colorFor(c.mdb_connections_pct || 0), val: (c.mdb_threads_connected || 0) + ' / ' + (c.mdb_max_connections || 0), unit: '', label: 'MariaDB Connections' },
+          mdb_run: { d: h.mdb_threads_running || [], color: '#d29922', val: String(c.mdb_threads_running || 0), unit: 'threads', label: 'MariaDB Running Threads' },
+          mdb_qps: { d: h.mdb_queries_ps || [], color: '#58a6ff', val: String(c.mdb_queries_ps || 0), unit: 'qps', label: 'MariaDB Queries/s' },
+          mdb_slow: { d: h.mdb_slow_queries_ps || [], color: (c.mdb_slow_queries_ps || 0) > 0 ? '#f85149' : '#3fb950', val: String(c.mdb_slow_queries_ps || 0), unit: 'qps', label: 'MariaDB Slow Queries/s' },
+          mdb_bp: { d: h.mdb_innodb_buffer_pool_hit_pct || [], color: colorFor((c.mdb_innodb_buffer_pool_hit_pct !== undefined ? c.mdb_innodb_buffer_pool_hit_pct : 100), true), val: (c.mdb_innodb_buffer_pool_hit_pct !== undefined ? c.mdb_innodb_buffer_pool_hit_pct : 100) + '%', unit: '', label: 'Buffer Pool Hit Rate' },
+          mdb_dirty: { d: h.mdb_innodb_buffer_pool_pages_flushed_ps || [], color: '#d29922', val: fmtNum(c.mdb_innodb_buffer_pool_pages_dirty || 0), unit: 'dirty', label: 'Dirty Pages' },
+          mdb_lock: { d: h.mdb_innodb_row_lock_waits_ps || [], color: (c.mdb_innodb_row_lock_waits_ps || 0) > 0 ? '#d29922' : '#3fb950', val: String(c.mdb_innodb_row_lock_waits_ps || 0), unit: 'waits/s', label: 'Lock Waits/s' },
+          mdb_deadlock: { d: h.mdb_innodb_deadlocks_ps || [], color: (c.mdb_innodb_deadlocks_ps || 0) > 0 ? '#f85149' : '#3fb950', val: String(c.mdb_innodb_deadlocks_ps || 0), unit: 'deadlocks/s', label: 'Deadlocks/s' }
+        };
+        var info = dataMap[cid];
+        if (!info) return;
+        if (el.querySelector('[data-chart-id="' + cid + '"]')) return;
+        var wrapper = document.createElement('div');
+        wrapper.setAttribute('data-chart-id', cid);
+        wrapper.innerHTML = largeChart(info.d, info.color, '', info.label, info.val, info.unit, 'expand_' + cid);
+        el.appendChild(wrapper);
+        el.classList.add('open');
+        var area = wrapper.querySelector('.chart-area');
+        if (area) {
+          area.addEventListener('mousemove', handleChartHover);
+          area.addEventListener('mouseleave', handleChartLeave);
+        }
+      };
+
+      window.toggleChart = function (cid) {
+        if (openCharts[cid]) {
+          delete openCharts[cid];
+          document.querySelectorAll('.metric-btn[onclick*="' + cid + '"]').forEach(function (b) { b.classList.remove('active') });
+          var expandId = 'chart-expand';
+          if (cid.indexOf('mdb_') === 0) expandId = 'chart-expand-mdb';
+          var el = document.getElementById(expandId);
+          if (el) {
+            var target = el.querySelector('[data-chart-id="' + cid + '"]');
+            if (target) target.remove();
+            if (!el.children.length) el.classList.remove('open');
+          }
+          return;
+        }
+        openChart(cid);
+      };
+
+      function rebuildCharts() {
+        var expandId = 'chart-expand';
+        var mdbId = 'chart-expand-mdb';
+        var el = document.getElementById(expandId);
+        var mdbEl = document.getElementById(mdbId);
+        if (el) { el.innerHTML = ''; el.classList.remove('open') }
+        if (mdbEl) { mdbEl.innerHTML = ''; mdbEl.classList.remove('open') }
+        Object.keys(openCharts).forEach(function (cid) { openChart(cid) });
+      }
+
+      var lastHistory = {};
+      var lastCurrent = {};
+
+      function metric(label, value, sub, spark, color, maxVal, cid) {
+        var h = '<div class="metric"><div class="metric-label">' + esc(label) + '</div>';
+        h += '<div class="metric-val" style="color:' + color + '">' + value + '</div>';
+        if (sub) h += '<div class="metric-sub">' + esc(String(sub)) + '</div>';
+        if (cid) h += '<button class="metric-btn" onclick="toggleChart(\'' + cid + '\')" title="Show chart"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M1 2.5A1.5 1.5 0 012.5 1h3A1.5 1.5 0 017 2.5v3A1.5 1.5 0 015.5 7h-3A1.5 1.5 0 011 5.5v-3zM9 2.5A1.5 1.5 0 0110.5 1h3A1.5 1.5 0 0115 2.5v3A1.5 1.5 0 0113.5 7h-3A1.5 1.5 0 019 5.5v-3zM1 10.5A1.5 1.5 0 012.5 9h3A1.5 1.5 0 017 10.5v3A1.5 1.5 0 015.5 15h-3A1.5 1.5 0 011 13.5v-3zM9 10.5A1.5 1.5 0 0110.5 9h3A1.5 1.5 0 0115 10.5v3A1.5 1.5 0 0113.5 15h-3A1.5 1.5 0 019 13.5v-3z"/></svg></button>';
+        h += '</div>';
+        return h;
+      }
+
+      function renderMariaDB(c, h) {
+        var repl = c.mdb_replication || { is_replica: false };
+        var s = '';
+
+        s += '<div class="metric-row">';
+        s += metric('Connections', c.mdb_threads_connected || 0, c.mdb_max_connections || 0 + ' max', h.mdb_threads_connected, colorFor(c.mdb_connections_pct || 0), '', 'mdb_conn');
+        s += metric('Running', c.mdb_threads_running || 0, 'threads active', h.mdb_threads_running, '#d29922', '', 'mdb_run');
+        s += metric('Queries/s', c.mdb_queries_ps || 0, fmtNum(c.mdb_queries_total || 0) + ' total', h.mdb_queries_ps, '#58a6ff', '', 'mdb_qps');
+        s += metric('Slow/s', c.mdb_slow_queries_ps || 0, fmtNum(c.mdb_slow_queries_total || 0) + ' total', h.mdb_slow_queries_ps, (c.mdb_slow_queries_ps || 0) > 0 ? '#f85149' : '#3fb950', '', 'mdb_slow');
+        s += '</div>';
+        s += '<div id="chart-expand-mdb" class="chart-expand"></div>';
+
+        var qtMax = Math.max(c.mdb_com_select_ps || 0, c.mdb_com_insert_ps || 0, c.mdb_com_update_ps || 0, c.mdb_com_delete_ps || 0, c.mdb_com_replace_ps || 0, 1);
+        s += '<div class="card" style="margin-bottom:16px"><div class="card-title">Query Types /s</div>';
+        s += barRow('SELECT', c.mdb_com_select_ps || 0, qtMax, '#58a6ff');
+        s += barRow('INSERT', c.mdb_com_insert_ps || 0, qtMax, '#3fb950');
+        s += barRow('UPDATE', c.mdb_com_update_ps || 0, qtMax, '#d29922');
+        s += barRow('DELETE', c.mdb_com_delete_ps || 0, qtMax, '#f85149');
+        s += barRow('REPLACE', c.mdb_com_replace_ps || 0, qtMax, '#a371f7');
+        s += '</div>';
+
+        var bpHit = c.mdb_innodb_buffer_pool_hit_pct !== undefined ? c.mdb_innodb_buffer_pool_hit_pct : 100;
+        s += '<div class="metric-row" style="margin-bottom:16px">';
+        s += metric('Buffer Pool Hit', bpHit + '%', 'reads vs requests', h.mdb_innodb_buffer_pool_hit_pct, colorFor(bpHit, true), '', 'mdb_bp');
+        s += metric('Dirty Pages', fmtNum(c.mdb_innodb_buffer_pool_pages_dirty || 0), (c.mdb_innodb_buffer_pool_pages_total || 0) + ' total', '', h.mdb_innodb_buffer_pool_pages_flushed_ps, '#d29922', '', 'mdb_dirty');
+        s += metric('Lock Waits/s', c.mdb_innodb_row_lock_waits_ps || 0, '', (c.mdb_innodb_row_lock_waits_ps || 0) > 0 ? h.mdb_innodb_row_lock_waits_ps : [], (c.mdb_innodb_row_lock_waits_ps || 0) > 0 ? '#d29922' : '#3fb950', '', 'mdb_lock');
+        s += metric('Deadlocks/s', c.mdb_innodb_deadlocks_ps || 0, '', [], (c.mdb_innodb_deadlocks_ps || 0) > 0 ? '#f85149' : '#3fb950', '', 'mdb_deadlock');
+        s += '</div>';
+
+        s += '<div class="card" style="margin-bottom:16px"><div class="card-title">Replication</div>';
+        if (!repl.is_replica) {
+          s += '<div style="display:flex;align-items:center;gap:10px">' + badge('PRIMARY / STANDALONE', 'n') + '<span style="color:var(--text3);font-size:.76rem">Not configured as a replica</span></div>';
+        } else {
+          var behind = repl.seconds_behind;
+          var okIo = String(repl.io_running).toLowerCase() === 'yes';
+          var okSql = String(repl.sql_running).toLowerCase() === 'yes';
+          s += '<div style="display:flex;gap:20px;flex-wrap:wrap">';
+          s += '<div><div style="font-size:.68rem;color:var(--text3)">IO Thread</div><div style="margin-top:2px">' + badge(okIo ? 'Running' : 'Stopped', okIo ? 'g' : 'r') + '</div></div>';
+          s += '<div><div style="font-size:.68rem;color:var(--text3)">SQL Thread</div><div style="margin-top:2px">' + badge(okSql ? 'Running' : 'Stopped', okSql ? 'g' : 'r') + '</div></div>';
+          s += '<div><div style="font-size:.68rem;color:var(--text3)">Seconds Behind</div><div style="margin-top:2px;font-size:1rem;font-weight:700;color:' + ((behind || 0) > 30 ? '#f85149' : (behind || 0) > 5 ? '#d29922' : '#3fb950') + '">' + (behind === null || behind === undefined ? 'N/A' : behind) + '</div></div>';
+          s += '</div>';
+          if (repl.last_error) s += '<div class="err-text" style="margin-top:10px">' + esc(repl.last_error) + '</div>';
+        }
+        s += '</div>';
+
+        var totalConn = c.mdb_processlist_total || 0;
+        var procRows = c.mdb_processlist || [];
+        s += '<div class="card"><div class="card-title">Process List (' + totalConn + ' connections, ' + (c.mdb_active_queries || 0) + ' active)</div>';
+        s += '<input id="procFilterInput" type="text" class="proc-filter" placeholder="Filter by user, host, db, state, query..." value="' + esc(procFilterText) + '" oninput="procFilterText=this.value">';
+        var filt = (procFilterText || '').toLowerCase().trim();
+        var rows = procRows;
+        if (filt) {
+          rows = rows.filter(function (q) {
+            return (String(q.id) + ' ' + q.user + ' ' + q.host + ' ' + q.db + ' ' + q.command + ' ' + q.state + ' ' + q.query).toLowerCase().indexOf(filt) !== -1;
+          });
+        }
+        if (rows.length) {
+          s += '<div style="overflow-x:auto;margin-top:10px"><table class="tbl"><thead><tr><th>ID</th><th>User</th><th>Host</th><th>DB</th><th>Cmd</th><th>Time</th><th>State</th><th>Query</th></tr></thead><tbody>';
+          rows.forEach(function (q) {
+            s += '<tr><td>' + esc(q.id) + '</td><td>' + esc(q.user) + '</td><td>' + esc(q.host) + '</td><td>' + esc(q.db || '—') + '</td><td>' + cmdBadge(q.command) + '</td><td>' + q.time + 's</td><td>' + esc(q.state || '') + '</td><td class="sql-cell" title="' + esc(q.query) + '">' + (q.query ? esc(q.query) : '<span style="color:var(--text3)">—</span>') + '</td></tr>';
+          });
+          s += '</tbody></table></div>';
+        } else {
+          s += '<div style="color:var(--text3);padding:12px;font-size:.78rem">' + (filt ? 'No connections match "' + esc(procFilterText) + '"' : 'No connections right now') + '</div>';
+        }
+        s += '</div>';
+        return getSectionHTML('mariadb', 'MariaDB' + (c.mdb_version ? ' <span style="font-weight:400;color:var(--text3);font-size:.78rem"> ' + esc(c.mdb_version) + '</span>' : ''), s, true);
+      }
+
+
+      function barRow(label, val, max, color, valText) {
+        var pct = max > 0 ? Math.min(100, (val / max) * 100) : 0;
+        return '<div style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:.72rem"><div style="width:80px;color:var(--text3);flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(label) + '</div><div style="flex:1;height:6px;background:var(--bg);border-radius:3px;overflow:hidden"><div style="height:100%;border-radius:3px;transition:width .4s;min-width:2px;width:' + pct + '%;background:' + color + '"></div></div><div style="width:64px;text-align:right;color:var(--text);font-weight:600;flex-shrink:0">' + esc(valText !== undefined ? valText : fmtNum(val)) + '</div></div>';
+      }
+
+      function render(d) {
+        var c = d.current || {}, h = d.history || {};
+        c.mdb_replication = c.mdb_replication || { is_replica: false };
+        c.mdb_processlist = c.mdb_processlist || [];
+        c.mdb_processlist_total = c.mdb_processlist_total || 0;
+        c.mdb_version = c.mdb_version || '';
+        c.erpnext_scheduler = c.erpnext_scheduler || 'Unknown';
+        c.workers_active = c.workers_active || 0;
+        c.workers_total = c.workers_total || 0;
+        c.erpnext_queued = c.erpnext_queued || 0;
+        c.erpnext_failed = c.erpnext_failed || 0;
+        c.emails_pending = c.emails_pending || 0;
+        c.redis_memory = c.redis_memory || 'N/A';
+        c.redis_connections = c.redis_connections || 0;
+        c.redis_keys = c.redis_keys || 0;
+        c.services = c.services || {};
+        c.active_sessions = c.active_sessions || 0;
+        c.recent_users = c.recent_users || [];
+        c.errors_24h = c.errors_24h || 0;
+        c.recent_errors = c.recent_errors || [];
+        c.slow_queries = c.slow_queries || [];
+        c.background_jobs = c.background_jobs || [];
+
+        var healthScore = c.cpu_total < 50 && c.ram_percent < 75 && c.disk_percent < 75 ? Math.round(100 - c.cpu_total * .2 - c.ram_percent * .15 - c.disk_percent * .15) : Math.round(100 - c.cpu_total * .3 - c.ram_percent * .2 - c.disk_percent * .2);
+        var hs = Math.max(0, Math.min(100, healthScore));
+        var hc = hs >= 80 ? '#3fb950' : hs >= 50 ? '#d29922' : '#f85149';
+        var hcText = hs >= 80 ? 'Healthy' : hs >= 50 ? 'Warning' : 'Critical';
+
+        // Accumulate client-side history to handle server cache/Redis failures
+        if (!window.clientHistory) window.clientHistory = {};
+        var ch = window.clientHistory;
+        Object.keys(c).forEach(function (k) {
+          var v = c[k];
+          if (typeof v === 'number') {
+            if (!ch[k]) ch[k] = [];
+            if (h && h[k] && Array.isArray(h[k]) && h[k].length > ch[k].length) {
+              ch[k] = h[k].slice();
+            }
+            if (c.timestamp && c.timestamp !== lastTimestamp) {
+              ch[k].push(v);
+              if (ch[k].length > 120) ch[k].shift();
+            }
+          }
+        });
+        h = ch;
+
+        chartStore = {};
+        lastTimestamp = c.timestamp || 0;
+        lastHistory = h;
+        lastCurrent = c;
+        var maxHistLen = 0;
+        Object.keys(h).forEach(function (k) { if (h[k] && h[k].length > maxHistLen) maxHistLen = h[k].length });
+        lastHistLen = maxHistLen;
+
+        var s = '';
+        s += '<div class="page-header"><div><div class="page-title">System Monitor</div></div>';
+        s += '<div class="page-meta">';
+        s += '<div class="chip" style="border-color:' + hc + '40;color:' + hc + '">● ' + hs + '% ' + esc(hcText) + '</div>';
+        s += '<div class="chip"><b>' + fmtUptime(c.uptime) + '</b> uptime</div>';
+        s += '<div class="chip"><b>' + c.cpu_count + '</b> cores</div>';
+        s += '<div class="chip">' + new Date(c.timestamp * 1000).toLocaleTimeString() + '</div>';
+        var liveOn = dataReceived;
+        s += '<div class="chip" style="border-color:' + (liveOn ? 'var(--green)' : 'var(--yellow)') + '40;color:' + (liveOn ? 'var(--green)' : 'var(--yellow)') + '">● ' + (liveOn ? 'LIVE' : 'CONNECTING') + '</div>';
+        s += '</div></div>';
+
+        s += '<div class="metric-row">';
+        s += metric('CPU', c.cpu_total + '%', 'load ' + c.load_1, h.cpu_total, colorFor(c.cpu_total), 100, 'cpu');
+        s += metric('Memory', c.ram_percent + '%', c.ram_used + ' / ' + c.ram_total + ' GB', h.ram_percent, colorFor(c.ram_percent), 100, 'mem');
+        s += metric('Disk', c.disk_percent + '%', c.disk_used + ' / ' + c.disk_total + ' GB', h.disk_percent, colorFor(c.disk_percent), 100, 'disk');
+        s += metric('Swap', c.swap_percent + '%', c.swap_used + ' / ' + c.swap_total + ' GB', h.swap_percent, colorFor(c.swap_percent), 100, 'swap');
+        s += '</div>';
+        s += '<div id="chart-expand" class="chart-expand"></div>';
+        s += '<div class="metric-row">';
+        s += metric('Net In', fmtBytesRate(c.net_recv), 'recv', h.net_recv, '#58a6ff', '', 'net_in');
+        s += metric('Net Out', fmtBytesRate(c.net_sent), 'sent', h.net_sent, '#3fb950', '', 'net_out');
+        s += metric('Disk Read', fmtBytesRate(c.disk_read_bytes), 'read', h.disk_read_bytes, '#d29922', '', 'disk_r');
+        s += metric('Disk Write', fmtBytesRate(c.disk_write_bytes), 'write', h.disk_write_bytes, '#f0883e', '', 'disk_w');
+        s += '</div>';
+
+        if (c.cpu_cores && c.cpu_cores.length > 0) {
+          var coresHTML = '<div class="card"><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(60px,1fr));gap:6px">';
+          c.cpu_cores.forEach(function (v, i) {
+            var cl = v < 50 ? '#3fb950' : v < 80 ? '#d29922' : '#f85149';
+            coresHTML += '<div style="text-align:center"><div style="font-size:.62rem;color:var(--text3)">C' + (i + 1) + '</div><div style="height:4px;border-radius:2px;background:var(--border);overflow:hidden;margin:3px 0"><div style="height:100%;border-radius:2px;transition:width .4s;width:' + v + '%;background:' + cl + '"></div></div><div style="font-size:.62rem;color:' + cl + '">' + Math.round(v) + '%</div></div>';
+          });
+          coresHTML += '</div></div>';
+          s += getSectionHTML('cpu-cores', 'CPU Cores', coresHTML, true);
+        }
+
+        if (c.top_processes) {
+          var tp = c.top_processes;
+          var tpHTML = '<div class="proc-row-grid">';
+
+          // CPU Top Processes
+          tpHTML += '<div class="proc-col"><h4>Top CPU Processes</h4><div class="card">';
+          if (tp.cpu && tp.cpu.length > 0) {
+            tp.cpu.forEach(function (p) {
+              var detailText = p.detail ? ' <span style="color:var(--text3);font-size:.7rem;font-weight:normal;margin-left:4px">(' + esc(p.detail) + ')</span>' : '';
+              var tooltip = p.cmdline ? esc(p.cmdline) : esc(p.name);
+              tpHTML += '<div class="proc-item" title="' + tooltip + '">' +
+                '<div class="proc-info">' +
+                '<div class="proc-name">' + esc(p.name) + detailText + '</div>' +
+                '<div class="proc-meta">PID: ' + p.pid + ' · ' + esc(p.user) + '</div>' +
+                '</div>' +
+                '<div class="proc-val">' + p.cpu + '%</div>' +
+                '</div>';
+            });
+          } else {
+            tpHTML += '<div style="color:var(--text3);padding:8px">No data</div>';
+          }
+          tpHTML += '</div></div>';
+
+          // Memory Top Processes
+          tpHTML += '<div class="proc-col"><h4>Top Memory Processes</h4><div class="card">';
+          if (tp.mem && tp.mem.length > 0) {
+            tp.mem.forEach(function (p) {
+              var detailText = p.detail ? ' <span style="color:var(--text3);font-size:.7rem;font-weight:normal;margin-left:4px">(' + esc(p.detail) + ')</span>' : '';
+              var tooltip = p.cmdline ? esc(p.cmdline) : esc(p.name);
+              var memVal = fmtBytes(p.mem);
+              var memPctStr = p.mem_pct !== undefined ? ' <span style="font-size:.7rem;color:var(--text3);font-weight:normal">(' + p.mem_pct + '%)</span>' : '';
+              tpHTML += '<div class="proc-item" title="' + tooltip + '">' +
+                '<div class="proc-info">' +
+                '<div class="proc-name">' + esc(p.name) + detailText + '</div>' +
+                '<div class="proc-meta">PID: ' + p.pid + ' · ' + esc(p.user) + '</div>' +
+                '</div>' +
+                '<div class="proc-val">' + memVal + memPctStr + '</div>' +
+                '</div>';
+            });
+          } else {
+            tpHTML += '<div style="color:var(--text3);padding:8px">No data</div>';
+          }
+          tpHTML += '</div></div>';
+
+          // Disk Top Processes
+          tpHTML += '<div class="proc-col"><h4>Top Disk I/O (Total)</h4><div class="card">';
+          if (tp.disk && tp.disk.length > 0) {
+            tp.disk.forEach(function (p) {
+              var detailText = p.detail ? ' <span style="color:var(--text3);font-size:.7rem;font-weight:normal;margin-left:4px">(' + esc(p.detail) + ')</span>' : '';
+              var tooltip = p.cmdline ? esc(p.cmdline) : esc(p.name);
+              tpHTML += '<div class="proc-item" title="' + tooltip + '">' +
+                '<div class="proc-info">' +
+                '<div class="proc-name">' + esc(p.name) + detailText + '</div>' +
+                '<div class="proc-meta">PID: ' + p.pid + ' · ' + esc(p.user) + '</div>' +
+                '</div>' +
+                '<div class="proc-val" style="font-size: .75rem; text-align: right;">' +
+                '<div>R: ' + fmtBytes(p.disk_read) + '</div>' +
+                '<div style="color: var(--text3); font-size: .65rem;">W: ' + fmtBytes(p.disk_write) + '</div>' +
+                '</div>' +
+                '</div>';
+            });
+          } else {
+            tpHTML += '<div style="color:var(--text3);padding:8px">No data</div>';
+          }
+          tpHTML += '</div></div>';
+
+          tpHTML += '</div>';
+          s += getSectionHTML('top-processes', 'Top Processes', tpHTML, false);
+        }
+
+        s += renderMariaDB(c, h);
+
+        var erpnextHTML = '<div class="metric-row">';
+        var sc = c.erpnext_scheduler === 'Running' ? '#3fb950' : c.erpnext_scheduler === 'Dormant' ? '#d29922' : '#f85149';
+        erpnextHTML += metric('Scheduler', '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + sc + ';margin-right:6px;box-shadow:0 0 6px ' + sc + '"></span>' + esc(c.erpnext_scheduler), '', [], sc, '');
+        erpnextHTML += metric('Workers', c.workers_active + '/' + c.workers_total, 'active', [], c.workers_active < c.workers_total * .5 ? '#d29922' : '#3fb950', '');
+        erpnextHTML += metric('Queued Jobs', c.erpnext_queued, '', [], c.erpnext_queued > 50 ? '#d29922' : '#3fb950', '');
+        erpnextHTML += metric('Failed Jobs', c.erpnext_failed, '', [], c.erpnext_failed > 0 ? '#f85149' : '#3fb950', '');
+        erpnextHTML += '</div>';
+        s += getSectionHTML('erpnext', 'ERPNext', erpnextHTML, true);
+
+        var redisHTML = '<div class="metric-row">';
+        redisHTML += metric('Memory', esc(c.redis_memory), 'used', '', c.redis_memory !== 'N/A' ? '#58a6ff' : '#6e7681', '');
+        redisHTML += metric('Connections', c.redis_connections, 'active', '', c.redis_connections > 100 ? '#d29922' : '#3fb950', '');
+        redisHTML += metric('Total Keys', c.redis_keys.toLocaleString(), '', '', c.redis_keys > 1e6 ? '#d29922' : '#58a6ff', '');
+        redisHTML += '</div>';
+        s += getSectionHTML('redis', 'Redis', redisHTML, true);
+
+        var servicesHTML = '<div class="card"><div class="svc-grid">';
+        Object.keys(c.services).forEach(function (n) {
+          var st = c.services[n];
+          var dc = st === 'Running' ? 'on' : st === 'Stopped' ? 'off' : 'unk';
+          servicesHTML += '<div class="svc-item"><span class="svc-dot ' + dc + '"></span><span class="svc-name">' + esc(n) + '</span><span class="svc-status">' + esc(st) + '</span></div>';
+        });
+        servicesHTML += '</div></div>';
+        s += getSectionHTML('services', 'Services', servicesHTML, true);
+
+        var usersHTML = '<div class="card">';
+        if (c.recent_users && c.recent_users.length) {
+          c.recent_users.forEach(function (u) {
+            var ini = (u.full_name || u.name).substring(0, 2).toUpperCase();
+            usersHTML += '<div class="user-item"><div class="user-av">' + esc(ini) + '</div><div><div class="user-name">' + esc(u.full_name) + '</div><div class="user-time">' + esc(u.last_active) + '</div></div></div>';
+          });
+        } else usersHTML += '<div style="color:var(--text3);padding:8px">No active users</div>';
+        usersHTML += '</div>';
+        s += getSectionHTML('users', 'Active Users (' + c.active_sessions + ' sessions)', usersHTML, true);
+
+        var errorsHTML = '<div class="card">';
+        if (c.recent_errors && c.recent_errors.length) {
+          c.recent_errors.forEach(function (e) {
+            errorsHTML += '<div class="err-item"><div class="err-method">' + esc(e.method) + '</div><div class="err-text">' + esc(e.error) + '</div><div class="err-time">' + esc(e.time) + '</div></div>';
+          });
+        } else errorsHTML += '<div style="color:var(--green);padding:8px">No errors in the last 24 hours</div>';
+        errorsHTML += '</div>';
+        s += getSectionHTML('errors', 'Recent Errors (24h: ' + c.errors_24h + ')', errorsHTML, true);
+
+        var slowQueriesHTML = '<div class="card">';
+        if (c.slow_queries.length) {
+          c.slow_queries.forEach(function (q) {
+            var tc = q.time > 30 ? 'var(--red)' : q.time > 5 ? 'var(--yellow)' : 'var(--green)';
+            slowQueriesHTML += '<div class="slow-item"><div class="slow-header">';
+            slowQueriesHTML += '<div class="slow-time" style="color:' + tc + '">' + q.time + 's</div>';
+            slowQueriesHTML += '<div class="slow-user">' + esc(q.user) + '</div>';
+            if (q.db) slowQueriesHTML += '<div class="slow-db">' + esc(q.db) + '</div>';
+            slowQueriesHTML += '<div class="job-status">' + esc(q.command) + '</div>';
+            slowQueriesHTML += '</div>';
+            if (q.query) slowQueriesHTML += '<div class="slow-query">' + esc(q.query) + '</div>';
+            slowQueriesHTML += '</div>';
+          });
+        } else slowQueriesHTML += '<div style="color:var(--green);padding:8px">No active queries</div>';
+        slowQueriesHTML += '</div>';
+        s += getSectionHTML('slow-queries', 'Running Queries (' + c.slow_queries.length + ')', slowQueriesHTML, false);
+
+        var bgJobsHTML = '<div class="card">';
+        if (c.background_jobs.length) {
+          c.background_jobs.forEach(function (j) {
+            bgJobsHTML += '<div class="job-item"><div style="flex:1;min-width:0">';
+            bgJobsHTML += '<div class="job-method">' + esc(j.method) + '</div>';
+            bgJobsHTML += '<div class="job-meta"><span class="job-queue">' + esc(j.queue) + '</span>';
+            if (j.started_at) bgJobsHTML += ' · started ' + esc(j.started_at);
+            if (j.enqueued_at) bgJobsHTML += ' · enqueued ' + esc(j.enqueued_at);
+            bgJobsHTML += '</div>';
+            if (j.exc_info) bgJobsHTML += '<div class="job-exc">' + esc(j.exc_info) + '</div>';
+            bgJobsHTML += '</div><div class="job-status ' + j.status + '">' + esc(j.status) + '</div></div>';
+          });
+        } else bgJobsHTML += '<div style="color:var(--green);padding:8px">No active jobs</div>';
+        bgJobsHTML += '</div>';
+        s += getSectionHTML('bg-jobs', 'Background Jobs (' + c.background_jobs.length + ')', bgJobsHTML, false);
+
+        ROOT.innerHTML = s;
+        ROOT.querySelectorAll('.chart-area[data-cid]').forEach(function (area) {
+          area.addEventListener('mousemove', handleChartHover);
+          area.addEventListener('mouseleave', handleChartLeave);
+        });
+        Object.keys(openCharts).forEach(function (cid) { openChart(cid) });
+      }
+
+      var connected = false, dataReceived = false, fallbackTimer = null;
+      var sioSocket = null;
+
+      function getSocketIOUrl(port) {
+        var loc = window.location;
+        var proto = loc.protocol === 'https:' ? 'https:' : 'http:';
+        return proto + '//' + loc.hostname + ':' + (port || 9000);
+      }
+
+      var cachedSiteInfo = null;
+
+      function fetchSiteInfo(cb) {
+        if (cachedSiteInfo !== null) { cb(cachedSiteInfo); return }
+        fetch("/api/method/frappe_system_monitor.frappe_system_monitor.system_monitor.get_sitename")
+          .then(function (r) { return r.json() })
+          .then(function (r) {
+            if (r && r.message) {
+              cachedSiteInfo = {
+                site_name: r.message.site_name,
+                socketio_port: r.message.socketio_port || 9000
+              };
+            } else {
+              cachedSiteInfo = {
+                site_name: window.location.hostname,
+                socketio_port: 9000
+              };
+            }
+            cb(cachedSiteInfo);
+          })
+          .catch(function () {
+            cachedSiteInfo = {
+              site_name: window.location.hostname,
+              socketio_port: 9000
+            };
+            cb(cachedSiteInfo);
+          });
+      }
+
+      function onDataReceived() {
+        if (dataReceived) return;
+        dataReceived = true;
+        connected = true;
+      }
+
+      function startHTTP() {
+        if (dataReceived) return;
+        connState.mode = 'http';
+        onDataReceived();
+        fetchHTTP();
+        if (fallbackTimer) clearInterval(fallbackTimer);
+        fallbackTimer = setInterval(fetchHTTP, 1000);
+      }
+
+      function fetchHTTP() {
+        fetch("/api/method/frappe_system_monitor.frappe_system_monitor.system_monitor.server_status")
+          .then(function (r) { return r.json() })
+          .then(function (r) { if (r && r.message) { onDataReceived(); render(r.message) } })
+          .catch(function () { });
+      }
+
+      function getCookie(name) {
+        var v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+        return v ? v[2] : null;
+      }
+
+      function trySocketIO() {
+        if (typeof io === 'undefined') { startHTTP(); return }
+        fetchSiteInfo(function (info) {
+          try {
+            var url = getSocketIOUrl(info.socketio_port) + '/' + info.site_name;
+            var sid = getCookie('sid');
+            sioSocket = io(url, {
+              transports: ['polling', 'websocket'],
+              reconnectionAttempts: 1,
+              timeout: 3000,
+              forceNew: true,
+              withCredentials: true,
+              auth: { sid: sid || '' }
+            });
+
+            sioSocket.on('connect', function () {
+              connState.mode = 'sio';
+            });
+
+            sioSocket.on('system_monitor_data', function (data) {
+              if (data && data.current) { onDataReceived(); render(data) }
+            });
+
+            sioSocket.on('connect_error', function (err) {
+              try { sioSocket.disconnect() } catch (e) { }
+              startHTTP();
+            });
+
+            sioSocket.on('disconnect', function () {
+              if (!dataReceived) startHTTP();
+            });
+
+            setTimeout(function () {
+              if (!dataReceived) {
+                try { sioSocket.disconnect() } catch (e) { }
+                startHTTP();
+              }
+            }, 3000);
+          } catch (e) {
+            startHTTP();
+          }
+        });
+      }
+
+      trySocketIO();
+    })();
+  </script>
+</body>
+
+</html>
