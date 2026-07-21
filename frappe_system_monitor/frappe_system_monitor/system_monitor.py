@@ -344,8 +344,15 @@ def _build_history_out(history):
     return out
 
 
+ALLOWED_ROLES = ["System Manager", "Administrator","ravi.patel@mantratec.com","hiren@mantratec.com","subhash@mantratec.com","sajal.chandrawanshi@mantratec.com","tapan.gandhi@mantratec.com","subhash@mantratec.com"]
+
+
 def _has_access():
-    return True
+	user = frappe.session.user
+	if user == "Guest":
+		return False
+	user_roles = frappe.get_roles(user)
+	return bool(set(ALLOWED_ROLES) & set(user_roles))
 
 
 @frappe.whitelist(allow_guest=True)
